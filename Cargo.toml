@@ -1,0 +1,19 @@
+[package]
+name = "my-socket-io-client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+my-web-socket-client = { tag = "0.2.0", git = "https://github.com/MyJetTools/my-web-socket-client.git" }
+socket-io-utils = { tag = "0.2.0", git = "https://github.com/MyJetTools/socket-io-utils.git" }
+flurl = { tag = "0.6.1", git = "https://github.com/MyJetTools/fl-url.git" }
+
+rust-extensions = { tag = "0.1.5", git = "https://github.com/MyJetTools/rust-extensions.git", features = [
+    "with-tokio",
+] }
+async-trait = "*"
+tokio = { version = "*", features = ["full"] }
+rand = "*"
+
+serde = { version = "*", features = ["derive"] }
