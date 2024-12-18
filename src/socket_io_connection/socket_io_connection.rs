@@ -6,11 +6,10 @@ use socket_io_utils::{SocketIoContract, SocketIoEventParameter, SocketIoMessage}
 use tokio::sync::Mutex;
 
 use super::*;
-use crate::{SocketIoNamespaceCallbacks, SocketIoSid};
+use crate::SocketIoNamespaceCallbacks;
 pub struct SocketIoConnection {
     ws_connection: Arc<WsConnection>,
     inner: Mutex<SocketIoConnectionInner>,
-    pub sid: SocketIoSid,
     debug_payload: bool,
 }
 
@@ -19,7 +18,6 @@ impl SocketIoConnection {
         SocketIoConnection {
             ws_connection,
             inner: Mutex::new(SocketIoConnectionInner::new()),
-            sid: SocketIoSid::new(),
             debug_payload,
         }
     }

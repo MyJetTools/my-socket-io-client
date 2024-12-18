@@ -13,6 +13,5 @@ rust-extensions = { tag = "0.1.5", git = "https://github.com/MyJetTools/rust-ext
 ] }
 async-trait = "*"
 tokio = { version = "*", features = ["full"] }
-rand = "*"
 
 serde = { version = "*", features = ["derive"] }
