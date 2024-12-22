@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 
-my-web-socket-client = { tag = "0.2.0", git = "https://github.com/MyJetTools/my-web-socket-client.git" }
+my-web-socket-client = { path = "../my-web-socket-client" }
 socket-io-utils = { tag = "0.2.0", git = "https://github.com/MyJetTools/socket-io-utils.git" }
 
 rust-extensions = { tag = "0.1.5", git = "https://github.com/MyJetTools/rust-extensions.git", features = [
@@ -15,3 +15,4 @@ async-trait = "*"
 tokio = { version = "*", features = ["full"] }
 
 serde = { version = "*", features = ["derive"] }
+serde_json = "*"

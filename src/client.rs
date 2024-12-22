@@ -3,7 +3,7 @@ use std::sync::Arc;
 use my_web_socket_client::*;
 use rust_extensions::{Logger, StrOrString};
 
-use crate::{client_inner::ClientInner, SocketIoCallbacks};
+use crate::{client_inner::*, *};
 
 pub struct MySocketIoClient {
     ws_client: WebSocketClient,
@@ -17,11 +17,13 @@ impl MySocketIoClient {
         callbacks: Arc<dyn SocketIoCallbacks + Send + Sync + 'static>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
     ) -> Self {
-        let ws_client = WebSocketClient::new(name, settings, logger);
+        let name = name.into();
+        let name = Arc::new(name);
+        let ws_client = WebSocketClient::new(name.clone(), settings, logger.clone());
 
         MySocketIoClient {
             ws_client,
-            inner: Arc::new(ClientInner::new(callbacks)),
+            inner: Arc::new(ClientInner::new(name, callbacks, logger)),
         }
     }
 
@@ -34,5 +36,22 @@ impl MySocketIoClient {
 
     pub fn start(&self) {
         self.ws_client.start(None, self.inner.clone());
+    }
+
+    pub async fn register_subscriber<
+        TModel: SocketIoSubscribeEventModel + Send + Sync + 'static,
+        TOutModel: SocketIoSubscribeOutModel + Send + Sync + 'static + serde::Serialize,
+    >(
+        &self,
+        callbacks: Arc<
+            dyn SocketIoEventSubscriberCallback<TModel, TOutModel> + Send + Sync + 'static,
+        >,
+    ) {
+        let subscriber = SocketIoEventSubscriber { callbacks };
+        let subscriber = Arc::new(subscriber);
+        self.inner
+            .event_subscribers
+            .register(TModel::NAME_SPACE, TModel::EVENT_NAME, subscriber)
+            .await;
     }
 }

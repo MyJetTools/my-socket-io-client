@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use my_web_socket_client::{hyper_tungstenite::tungstenite::Message, WsConnection};
-use rust_extensions::{StrOrString, TaskCompletion};
-use socket_io_utils::{SocketIoContract, SocketIoEventParameter, SocketIoMessage};
+use rust_extensions::TaskCompletion;
+use socket_io_utils::{SocketIoContract, SocketIoMessage};
 use tokio::sync::Mutex;
 
 use super::*;
-use crate::SocketIoNamespaceCallbacks;
+use crate::*;
 pub struct SocketIoConnection {
     ws_connection: Arc<WsConnection>,
     inner: Mutex<SocketIoConnectionInner>,
@@ -21,36 +21,26 @@ impl SocketIoConnection {
             debug_payload,
         }
     }
-
-    pub async fn subscribe_to_namespace(
-        &self,
-        callback: Arc<dyn SocketIoNamespaceCallbacks + Send + Sync + 'static>,
-    ) {
-        let namespace = callback.get_namespace();
-        {
-            let mut inner = self.inner.lock().await;
-            inner.subscribers.insert(namespace, callback);
-        }
-
-        let contract: SocketIoContract = SocketIoMessage::Connect {
-            namespace: namespace.to_string().into(),
-            sid: None,
-        }
-        .into();
-
-        self.send_message(&contract).await;
+    pub async fn set_sid(&self, sid: String) {
+        let mut inner = self.inner.lock().await;
+        inner.sid = Some(sid);
     }
 
-    pub async fn subscribe_confirmed(&self, namespace: &str) {
-        let mut inner = self.inner.lock().await;
-        let mut task_completion = inner.active_subscribe_awaiters.remove(namespace).unwrap();
-        task_completion.set_ok(());
+    pub async fn get_sid(&self) -> Option<String> {
+        let inner = self.inner.lock().await;
+        inner.sid.clone()
     }
 
-    pub async fn subscribe_failed(&self, namespace: &str, message: String) {
-        let mut inner = self.inner.lock().await;
-        let mut task_completion = inner.active_subscribe_awaiters.remove(namespace).unwrap();
-        task_completion.set_error(message);
+    pub(crate) async fn subscribe_to_namespaces(&self, namespaces: Vec<&'static str>) {
+        for namespace in namespaces {
+            let contract: SocketIoContract = SocketIoMessage::Connect {
+                namespace: namespace.into(),
+                sid: None,
+            }
+            .into();
+
+            self.send_message(&contract).await;
+        }
     }
 
     pub async fn send_message(&self, contract: &SocketIoContract) {
@@ -79,21 +69,23 @@ impl SocketIoConnection {
         }
     }
 
-    pub async fn send_event_with_ack(
+    pub async fn send_event_with_ack<
+        TInModel: SocketIoRpcInModel,
+        TOutModel: SocketIoRpcOutModel,
+    >(
         &self,
-        namespace: impl Into<StrOrString<'static>>,
-        parameters: Vec<SocketIoEventParameter>,
-    ) -> Result<Vec<SocketIoEventParameter>, String> {
+        data: &TInModel,
+    ) -> Result<TOutModel, String> {
         let (awaiter, message) = {
             let mut inner = self.inner.lock().await;
 
             let ack_id = inner.get_next_ack_id();
-            let namespace = namespace.into();
 
             let mut task_completion = TaskCompletion::new();
 
             let awaiter = task_completion.get_awaiter();
-            match inner.active_ack_awaiters.get_mut(namespace.as_str()) {
+
+            match inner.active_ack_awaiters.get_mut(TInModel::NAME_SPACE) {
                 Some(awaiters) => {
                     awaiters.add_awaiter(ack_id, task_completion);
                 }
@@ -102,13 +94,16 @@ impl SocketIoConnection {
                     awaiters.add_awaiter(ack_id, task_completion);
                     inner
                         .active_ack_awaiters
-                        .insert(namespace.as_str().to_string(), awaiters);
+                        .insert(TInModel::NAME_SPACE.to_string(), awaiters);
                 }
             }
 
+            let data = data.serialize();
+
             let message = SocketIoMessage::Event {
-                namespace,
-                data: parameters,
+                namespace: TInModel::NAME_SPACE.into(),
+                data: data.into(),
+                event_name: TInModel::EVENT_NAME.into(),
                 ack: ack_id.into(),
             };
 
@@ -117,34 +112,31 @@ impl SocketIoConnection {
 
         self.send_message(&message.into()).await;
 
-        awaiter.get_result().await
+        let result = awaiter.get_result().await?;
+
+        let result = TOutModel::deserialize(&result);
+        Ok(result)
     }
 
-    pub async fn send_event_and_forget(
-        &self,
-        namespace: impl Into<StrOrString<'static>>,
-        parameters: Vec<SocketIoEventParameter>,
-    ) {
+    pub async fn send_event_and_forget<TInModel: SocketIoRpcInModel>(&self, model: &TInModel) {
+        let data = model.serialize();
+
         let message = SocketIoMessage::Event {
-            namespace: namespace.into(),
-            data: parameters,
+            namespace: TInModel::NAME_SPACE.into(),
+            event_name: TInModel::EVENT_NAME.into(),
+            data: data.into(),
             ack: None,
         };
 
         self.send_message(&message.into()).await;
     }
 
-    pub(crate) async fn handle_ack_event(
-        &self,
-        namespace: &str,
-        ack_id: u64,
-        parameters: Vec<SocketIoEventParameter>,
-    ) {
+    pub(crate) async fn handle_ack_event(&self, namespace: &str, ack_id: i64, data: String) {
         let mut inner = self.inner.lock().await;
 
         if let Some(awaiters) = inner.active_ack_awaiters.get_mut(namespace) {
             if let Some(mut awaiter) = awaiters.remove_awaiter(ack_id) {
-                awaiter.set_ok(parameters);
+                awaiter.set_ok(data);
             } else {
                 panic!("Trying to ack an event that has no awaiter");
             }
