@@ -17,3 +17,5 @@ mod event_subscribers;
 pub use event_subscribers::*;
 mod socket_io_rpc_models;
 pub use socket_io_rpc_models::*;
+mod socket_io_settings;
+pub use socket_io_settings::*;

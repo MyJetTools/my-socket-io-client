@@ -11,7 +11,7 @@ use my_web_socket_client::{
     WsCallback, WsConnection,
 };
 
-use crate::{EventSubscribers, SocketIoCallbacks, SocketIoConnection};
+use crate::{EventSubscribers, SocketIoCallbacks, SocketIoConnection, WebSocketIoSettings};
 
 #[derive(Default)]
 pub struct SocketIoContext {
@@ -25,6 +25,7 @@ pub struct ClientInner {
     context: Mutex<SocketIoContext>,
     pub debug_payloads: AtomicBool,
     pub event_subscribers: EventSubscribers,
+    settings: Arc<WebSocketIoSettings>,
     logger: Arc<dyn Logger + Send + Sync + 'static>,
 }
 
@@ -32,6 +33,7 @@ impl ClientInner {
     pub fn new(
         client_name: Arc<StrOrString<'static>>,
         callbacks: Arc<dyn SocketIoCallbacks + Send + Sync + 'static>,
+        settings: Arc<WebSocketIoSettings>,
         logger: Arc<dyn Logger + Send + Sync + 'static>,
     ) -> Self {
         ClientInner {
@@ -40,6 +42,7 @@ impl ClientInner {
             context: Mutex::new(SocketIoContext::default()),
             debug_payloads: AtomicBool::new(false),
             event_subscribers: EventSubscribers::new(),
+            settings,
             logger,
         }
     }
@@ -190,20 +193,44 @@ impl WsCallback for ClientInner {
         &self,
         url: String,
     ) -> Result<StartWsConnectionDataToApply, String> {
-        let mut before_connect_result = self.callbacks.before_connect().await;
-
         let mut url = UrlBuilder::new(url.as_str());
         url.append_query_param("EIO", Some("4"));
         url.append_query_param("transport", Some("websocket"));
 
-        if let Some(append_query_params) = before_connect_result.append_query_params.take() {
-            for (key, value) in append_query_params {
-                url.append_query_param(key.as_str(), Some(value.as_str()));
-            }
+        let query_params = self
+            .settings
+            .socket_io_settings
+            .get_query_params(self.client_name.as_str())
+            .await;
+
+        for (key, value) in query_params {
+            url.append_query_param(key.as_str(), Some(value.as_str()));
         }
 
+        let headers = self
+            .settings
+            .socket_io_settings
+            .get_headers(self.client_name.as_str())
+            .await;
+
+        let headers = if headers.len() == 0 {
+            None
+        } else {
+            let headers: Vec<_> = headers
+                .into_iter()
+                .map(|(key, value)| {
+                    (
+                        StrOrString::create_as_string(key),
+                        StrOrString::create_as_string(value),
+                    )
+                })
+                .collect();
+
+            Some(headers)
+        };
+
         let result = StartWsConnectionDataToApply {
-            headers: before_connect_result.append_headers,
+            headers,
             url: Some(url),
         };
 
