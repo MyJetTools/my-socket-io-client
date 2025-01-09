@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use my_web_socket_client::*;
+use my_web_socket_client::hyper_tungstenite::tungstenite::Message;
 use rust_extensions::{Logger, StrOrString};
 
 use crate::{client_inner::*, *};
@@ -41,7 +42,8 @@ impl MySocketIoClient {
     }
 
     pub fn start(&self) {
-        self.ws_client.start(None, self.inner.clone());
+        let ping_message = Message::Ping(bytes::Bytes::new());
+        self.ws_client.start(Some(ping_message), self.inner.clone());
     }
 
     pub async fn register_subscriber<
