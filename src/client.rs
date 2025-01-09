@@ -62,6 +62,10 @@ impl MySocketIoClient {
             .register(TModel::NAME_SPACE, TModel::EVENT_NAME, subscriber)
             .await;
     }
+
+    pub fn stop(&self) {
+        self.ws_client.stop()
+    }
 }
 
 pub(crate) struct WebSocketIoSettings {
