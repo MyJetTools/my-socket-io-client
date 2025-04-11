@@ -61,7 +61,9 @@ impl SocketIoConnection {
             let mut payloads = vec![Message::Text(payload.text_frame.into())];
 
             for binary in payload.binary_frames {
-                println!("Sending socket_io binary payload: Len:{}", binary.len());
+                if self.debug_payload {
+                    println!("Sending socket_io binary payload: Len:{}", binary.len());
+                }
                 payloads.push(Message::Binary(binary.into()));
             }
 

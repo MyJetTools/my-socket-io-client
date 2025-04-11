@@ -172,7 +172,9 @@ impl ClientInner {
                 }
             }
             SocketIoContract::Pong { with_probe } => {
-                println!("Pong received with_probe: {}", with_probe);
+                if self.get_debug_payloads() {
+                    println!("Pong received with_probe: {}", with_probe);
+                }
 
                 if with_probe {
                     let connection = self.get_current_connection().await;
@@ -253,7 +255,9 @@ impl WsCallback for ClientInner {
     async fn on_data(&self, _ws_connection: Arc<WsConnection>, data: Message) {
         let debug_payloads = self.get_debug_payloads();
 
-        println!("Data received {:?}", data);
+        if debug_payloads {
+            println!("Data received {:?}", data);
+        }
         match data {
             Message::Text(text) => {
                 if debug_payloads {
@@ -264,7 +268,9 @@ impl WsCallback for ClientInner {
                 self.handle_socket_io_contract(contract).await;
             }
             Message::Binary(_) => {
-                println!("Binary Payloads are not supported yet");
+                if debug_payloads {
+                    println!("Binary Payloads are not supported yet");
+                }
             }
             Message::Ping(payload) => {
                 if debug_payloads {
