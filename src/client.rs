@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use my_web_socket_client::*;
 use my_web_socket_client::hyper_tungstenite::tungstenite::Message;
+use my_web_socket_client::*;
 use rust_extensions::{Logger, StrOrString};
 
 use crate::{client_inner::*, *};
@@ -74,7 +74,7 @@ pub(crate) struct WebSocketIoSettings {
 
 #[async_trait::async_trait]
 impl WsClientSettings for WebSocketIoSettings {
-    async fn get_url(&self, client_name: &str) -> String {
+    async fn get_url(&self, client_name: &str) -> Option<String> {
         let mut result = self.socket_io_settings.get_server_url(client_name).await;
 
         if !result.ends_with('/') {
@@ -96,6 +96,6 @@ impl WsClientSettings for WebSocketIoSettings {
             result.push('/');
         }
 
-        result
+        Some(result)
     }
 }
